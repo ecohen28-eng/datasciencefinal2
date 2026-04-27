@@ -372,6 +372,10 @@ def update_scatter(x):
     model = LinearRegression()
     model.fit(df[[x]], df["Close"])
     df["trend"] = model.predict(df[[x]])
+    r2 = model.score(df[[x]], df["Close"])
+    slope = model.coef_[0]
+    intercept = model.intercept_
+    corr = df[x].corr(df["Close"])
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df[x],
@@ -385,10 +389,25 @@ def update_scatter(x):
         mode="lines",
         name="Regression Line"
     ))
-
     fig.update_layout(
         template="lilly",
         title=f"{x} vs LLY Price"
+    )
+    fig.add_annotation(
+        text=(
+            f"R²: {r2:.3f}<br>"
+            f"Slope: {slope:.3f}<br>"
+            f"Intercept: {intercept:.3f}<br>"
+            f"Correlation: {corr:.3f}"
+        ),
+        align="left",
+        showarrow=False,
+        xref="paper",
+        yref="paper",
+        x=0.02,
+        y=0.98,
+        bgcolor="rgba(255,255,255,0.7)",
+        bordercolor="#6E0000"
     )
     return fig
 

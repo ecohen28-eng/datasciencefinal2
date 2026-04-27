@@ -128,6 +128,7 @@ Merge["LLY_pct_change"] = Merge["Close"].pct_change()
 
 # DASH APP
 app = dash.Dash(__name__)
+server = app.server
 
 app.layout = html.Div(style={
    'backgroundColor': "#FAEBE4",

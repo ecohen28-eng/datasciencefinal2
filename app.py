@@ -363,14 +363,34 @@ dcc.Tab(label="Live Market Terminal", children=[
    Output("scatter","figure"),
    Input("macro-x","value")
 )
+@app.callback(
+   Output("scatter","figure"),
+   Input("macro-x","value")
+)
 def update_scatter(x):
-   fig = px.scatter(
-       Merge, x=x, y="Close",
-       #trendline="ols",
-       title=f"{x} vs LLY Price"
-   )
-   fig.update_layout(template="lilly")
-   return fig
+    df = Merge[[x, "Close"]].dropna()
+    model = LinearRegression()
+    model.fit(df[[x]], df["Close"])
+    df["trend"] = model.predict(df[[x]])
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df[x],
+        y=df["Close"],
+        mode="markers",
+        name="Data"
+    ))
+    fig.add_trace(go.Scatter(
+        x=df[x],
+        y=df["trend"],
+        mode="lines",
+        name="Regression Line"
+    ))
+
+    fig.update_layout(
+        template="lilly",
+        title=f"{x} vs LLY Price"
+    )
+    return fig
 
 @app.callback(
    Output("forecast","figure"),

@@ -13,10 +13,10 @@ import plotly.io as pio
 import yfinance as yf
 
 # DATA
-Y = pd.read_csv("/Users/EthanCohen/Downloads/LLY Data.csv")
-Macro = pd.read_csv("/Users/EthanCohen/Downloads/2025-Historic_Domestic.csv")
-baseline = pd.read_csv("/Users/EthanCohen/Downloads/baseline2025.csv")
-bad = pd.read_csv("/Users/EthanCohen/Downloads/bad2025.csv")
+Y = pd.read_csv("LLY Data.csv")
+Macro = pd.read_csv("2025-Historic_Domestic.csv")
+baseline = pd.read_csv("baseline2025.csv")
+bad = pd.read_csv("bad2025.csv")
 external_stylesheets = [
    'https://googleapis.com'
 ]

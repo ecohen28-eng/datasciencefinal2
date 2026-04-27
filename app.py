@@ -366,7 +366,7 @@ dcc.Tab(label="Live Market Terminal", children=[
 def update_scatter(x):
    fig = px.scatter(
        Merge, x=x, y="Close",
-       trendline="ols",
+       #trendline="ols",
        title=f"{x} vs LLY Price"
    )
    fig.update_layout(template="lilly")

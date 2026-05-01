@@ -33,7 +33,27 @@ def get_live_lly():
    data["LLY_pct_change"] = data["Close"].pct_change()
 
    return data
-   
+
+def get_post_2024_actuals():
+
+    data = yf.download("LLY", start="2024-10-01")
+
+    data.columns = [col[0] if isinstance(col, tuple) else col for col in data.columns]
+    data.reset_index(inplace=True)
+
+    # convert to quarter end dates
+    data["quarter"] = data["Date"].dt.to_period("Q")
+    q = data.groupby("quarter").last().reset_index()
+
+    def convert(qtr):
+        y = qtr.year
+        m = {1:3,2:6,3:9,4:12}[qtr.quarter]
+        return datetime.datetime(y, m, 30)
+
+    q["Date1"] = q["quarter"].apply(convert)
+
+    return q[["Date1","Close"]]
+
 Y_live = get_live_lly()
 
 # TEMPLATE
@@ -579,7 +599,74 @@ def analytics(var):
         showarrow=False,
         bgcolor="rgba(255,255,255,0.7)"
     )
+    # -------- REAL WORLD BACKTEST (POST-2024) --------
 
+    actual = get_post_2024_actuals()
+
+    # retrain model on ALL pre-2024 data
+    full = df[df["Date1"] < datetime.datetime(2024,10,1)].copy()
+
+    X_full = imp.fit_transform(full[[var]])
+    y_full = full["LLY_pct_change"]
+
+    model.fit(X_full, y_full)
+
+    # align macro data with post-2024
+    future_macro = Merge[Merge["Date1"] >= datetime.datetime(2024,10,1)].copy()
+    future_macro = future_macro.dropna(subset=[var])
+
+    if len(future_macro) > 0:
+
+        Xf = imp.transform(future_macro[[var]])
+        future_macro["pred"] = model.predict(Xf)
+
+        last_real_price = full["Close"].dropna().iloc[-1]
+
+        future_macro["pred_price"] = last_real_price * (1 + future_macro["pred"]).cumprod()
+
+        # merge with actual
+        compare = pd.merge(
+            future_macro[["Date1","pred_price"]],
+            actual,
+            on="Date1",
+            how="inner"
+        )
+
+        if len(compare) > 1:
+
+            rmse_live = np.sqrt(mean_squared_error(compare["Close"], compare["pred_price"]))
+
+            direction_acc = np.mean(
+                np.sign(compare["Close"].pct_change().dropna()) ==
+                np.sign(compare["pred_price"].pct_change().dropna())
+            )
+
+            fig1.add_trace(go.Scatter(
+                x=compare["Date1"],
+                y=compare["pred_price"],
+                name="Live Prediction",
+                line=dict(dash="dot")
+            ))
+
+            fig1.add_trace(go.Scatter(
+                x=compare["Date1"],
+                y=compare["Close"],
+                name="Actual (Post-2024)",
+                line=dict(width=3)
+            ))
+
+            fig1.add_annotation(
+                text=(
+                    f"Live RMSE: {rmse_live:.4f}<br>"
+                    f"Directional Acc: {direction_acc:.2%}"
+                ),
+                x=0.98, y=0.02,
+                xref="paper", yref="paper",
+                showarrow=False,
+                align="right",
+                bgcolor="rgba(255,255,255,0.7)"
+            )
+           
     # -------- RESIDUAL CHART --------
     test["residuals"] = y_test - test["pred"]
 

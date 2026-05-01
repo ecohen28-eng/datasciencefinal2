@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 from sklearn.linear_model import LinearRegression
 from sklearn.impute import SimpleImputer
+from sklearn.metrics import mean_squared_error
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
@@ -296,6 +297,38 @@ dcc.Tab(label="Forecast", children=[
    dcc.Graph(id="forecast")
 ]),
 
+# ANALYTICS TAB
+dcc.Tab(label="Analytics", children=[
+
+    html.Br(),
+
+    html.Div([
+        html.H4("Model Diagnostics & Backtesting"),
+        html.P(
+            "This section evaluates model performance using historical data. "
+            "We compare predicted vs actual returns, measure error, and test "
+            "how well the model generalizes out-of-sample."
+        )
+    ]),
+
+    dcc.Dropdown(
+        id="analytics-var",
+        options=[
+            {"label":"Real GDP","value":"Real GDP growth"},
+            {"label":"Nominal GDP","value":"Nominal GDP growth"},
+            {"label":"Unemployment","value":"Unemployment rate"},
+            {"label":"Inflation","value":"CPI inflation rate"},
+        ],
+        value="Real GDP growth",
+        style={'color':'black'}
+    ),
+
+    dcc.Graph(id="backtest-chart"),
+
+    dcc.Graph(id="residual-chart")
+
+]),
+   
 # LIVEDATA
 
 dcc.Tab(label="Live Market Terminal", children=[
@@ -473,6 +506,103 @@ def forecast(var):
    )
 
    return fig
+
+@app.callback(
+    [Output("backtest-chart","figure"),
+     Output("residual-chart","figure")],
+    Input("analytics-var","value")
+)
+def analytics(var):
+
+    df = Merge.dropna(subset=["LLY_pct_change", var]).copy()
+
+    # Train/Test Split (80/20 time series split)
+    split = int(len(df) * 0.8)
+    train = df.iloc[:split]
+    test = df.iloc[split:]
+
+    X_train = train[[var]]
+    y_train = train["LLY_pct_change"]
+
+    X_test = test[[var]]
+    y_test = test["LLY_pct_change"]
+
+    imp = SimpleImputer()
+    X_train = imp.fit_transform(X_train)
+    X_test = imp.transform(X_test)
+
+    model = LinearRegression().fit(X_train, y_train)
+
+    # Predictions
+    train["pred"] = model.predict(X_train)
+    test["pred"] = model.predict(X_test)
+
+    # Metrics
+    r2_train = model.score(X_train, y_train)
+    r2_test = model.score(X_test, y_test)
+
+    rmse = np.sqrt(mean_squared_error(y_test, test["pred"]))
+
+    # -------- BACKTEST CHART --------
+    fig1 = go.Figure()
+
+    fig1.add_trace(go.Scatter(
+        x=train["Date1"], y=train["LLY_pct_change"],
+        name="Train Actual"
+    ))
+
+    fig1.add_trace(go.Scatter(
+        x=test["Date1"], y=test["LLY_pct_change"],
+        name="Test Actual"
+    ))
+
+    fig1.add_trace(go.Scatter(
+        x=test["Date1"], y=test["pred"],
+        name="Predicted"
+    ))
+
+    fig1.add_vline(x=test["Date1"].iloc[0], line_dash="dash")
+
+    fig1.update_layout(
+        template="lilly",
+        title=f"Backtest: {var} → LLY Returns"
+    )
+
+    fig1.add_annotation(
+        text=(
+            f"Train R²: {r2_train:.3f}<br>"
+            f"Test R²: {r2_test:.3f}<br>"
+            f"RMSE: {rmse:.4f}"
+        ),
+        x=0.02, y=0.98,
+        xref="paper", yref="paper",
+        showarrow=False,
+        bgcolor="rgba(255,255,255,0.7)"
+    )
+
+    # -------- RESIDUAL CHART --------
+    test["residuals"] = y_test - test["pred"]
+
+    fig2 = go.Figure()
+
+    fig2.add_trace(go.Scatter(
+        x=test["pred"],
+        y=test["residuals"],
+        mode="markers",
+        name="Residuals"
+    ))
+
+    fig2.add_hline(y=0, line_dash="dash")
+
+    fig2.update_layout(
+        template="lilly",
+        title="Residual Analysis (Error vs Prediction)",
+        xaxis_title="Predicted Return",
+        yaxis_title="Residuals"
+    )
+
+    return fig1, fig2
+
 # END THE APP
 if __name__ == "__main__":
    app.run(debug=False, port=8093)
